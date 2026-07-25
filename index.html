@@ -51,7 +51,7 @@
 
 <div class="card">
   <h2>Clipboard Empty Line Replacer</h2>
-  <p>Press <code>Ctrl + V</code> (or <code>Cmd + V</code>) anywhere on this page to transform empty lines into <code>&lt;emptyline&gt;</code> while keeping rich formatting.</p>
+  <p>Press <code>Ctrl + V</code> (or <code>Cmd + V</code>) anywhere on this page to transform empty lines into <code>&lt;emptyline&gt;</code>, using strictly <code>&lt;br&gt;</code> tags for line breaks.</p>
   
   <div class="drop-zone" tabindex="0">
     Click here and press <strong>Ctrl + V</strong>
@@ -74,40 +74,43 @@ document.addEventListener('paste', async (e) => {
       throw new Error('Pasted content contains no text or HTML.');
     }
 
-    // 1. Process Plain Text: replace blank/empty line spaces with line breaks https://share.gemini.google/jhg1Bfyi6FJ2
+    // 1. Process Plain Text (replace blank lines with <emptyline>) https://share.gemini.google/8ZOQESHjdMju
     const updatedPlain = plainContent
       .split(/\r?\n/)
       .map(line => line.trim() === '' ? '<emptyline>' : line)
       .join('\n');
 
-    // 2. Process HTML Text
+    // 2. Process HTML Text using strictly <br> tags
     let updatedHTML = htmlContent;
     if (htmlContent) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlContent, 'text/html');
 
-      // Target block elements
+      // First, handle existing standalone <br> tags
+      const existingBrs = doc.querySelectorAll('br');
+      existingBrs.forEach(br => {
+        const span = doc.createElement('span');
+        span.innerHTML = '&lt;emptyline&gt;<br>';
+        br.parentNode.replaceChild(span, br);
+      });
+
+      // Process block-level structural elements (p, div, headings)
       const blocks = doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6');
       blocks.forEach(block => {
         const text = block.textContent.replace(/\u200B/g, '').trim();
         if (text === '') {
-          // Replace content with block-level wrapper to prevent inline collapsing
-          block.innerHTML = '<div>&lt;emptyline&gt;</div>';
+          // Empty block becomes literal <emptyline> followed by a <br>
+          block.innerHTML = '&lt;emptyline&gt;<br>';
+        } else {
+          // Content block gets an explicit <br> appended at its boundary
+          block.innerHTML = block.innerHTML + '<br>';
         }
-      });
-
-      // Target standalone <br> tags
-      const brs = doc.querySelectorAll('br');
-      brs.forEach(br => {
-        const container = doc.createElement('div');
-        container.textContent = '<emptyline>';
-        br.parentNode.replaceChild(container, br);
       });
 
       updatedHTML = doc.body.innerHTML;
     }
 
-    // 3. Write back transformed content to clipboard
+    // 3. Write back transformed payload to clipboard
     const blobs = {
       'text/plain': new Blob([updatedPlain], { type: 'text/plain' })
     };
@@ -117,7 +120,7 @@ document.addEventListener('paste', async (e) => {
 
     await navigator.clipboard.write([new ClipboardItem(blobs)]);
 
-    showStatus('Success! Separated <emptyline> written to clipboard. Ready to paste.', 'success');
+    showStatus('Success! Formatted with strict <br> line breaks. Ready to paste.', 'success');
   } catch (err) {
     showStatus(`Error: ${err.message}`, 'error');
   }
