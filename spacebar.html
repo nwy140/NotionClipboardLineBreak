@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clipboard Empty Line Replacer</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background-color: #0d1117;
+      color: #c9d1d9;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+    .drop-zone {
+      border: 2px dashed #30363d;
+      border-radius: 6px;
+      padding: 30px;
+      margin-top: 15px;
+      background: #0d1117;
+      color: #8b949e;
+      outline: none;
+    }
+    .drop-zone:focus {
+      border-color: #58a6ff;
+      color: #c9d1d9;
+    }
+    #status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      display: none;
+      font-size: 14px;
+      word-break: break-word;
+      text-align: left;
+    }
+    .success { background-color: rgba(46, 160, 67, 0.15); border: 1px solid #2ea043; color: #56d364; }
+    .error { background-color: rgba(248, 81, 73, 0.15); border: 1px solid #f85149; color: #ff7b72; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Clipboard Empty Line Replacer</h2>
+  <p>Press <code>Ctrl + V</code> anywhere to process clipboard contents.</p>
+  
+  <div class="drop-zone" tabindex="0">
+    Click here and press <strong>Ctrl + V</strong>
+  </div>
+
+  <div id="status"></div>
+</div>
+
+<script>
+document.addEventListener('paste', async (e) => {
+  e.preventDefault();
+  showStatus('Processing paste payload...', 'text/plain');
+
+  try {
+    const clipboardData = e.clipboardData;
+    const htmlContent = clipboardData.getData('text/html');
+    const plainContent = clipboardData.getData('text/plain');
+
+    if (!htmlContent && !plainContent) {
+      throw new Error('Pasted content contains no text or HTML.');
+    }
+
+    // 1. Process Plain Text (only blank lines become  )
+    const updatedPlain = plainContent
+      .split(/\r?\n/)
+      .map(line => line.trim() === '' ? ' ' : line)
+      .join('\n');
+
+    // 2. Process HTML Text
+    let updatedHTML = htmlContent;
+    if (htmlContent) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+
+      // Strip Apple/Webkit system trailing tags
+      doc.querySelectorAll('.Apple-interchange-newline').forEach(el => el.remove());
+
+      // Target <br> elements
+      const brs = doc.querySelectorAll('br');
+      brs.forEach(br => {
+        // Find closest enclosing paragraph or block container
+        const blockParent = br.closest('p, div, h1, h2, h3, h4, h5, h6');
+
+        if (blockParent) {
+          // If the parent block contains actual visible text, this <br> is just an intra-paragraph line break
+          const text = blockParent.textContent.replace(/\u200B/g, '').trim();
+          if (text.length > 0) {
+            return; // Leave as normal soft break
+          }
+        }
+
+        // If <br> is truly isolated outside text blocks, replace with  
+        const emptyBlock = doc.createElement('p');
+        emptyBlock.textContent = ' ';
+        br.parentNode.replaceChild(emptyBlock, br);
+      });
+
+      // Target block elements (<p>, <div>) that contain zero text content
+      const blocks = doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6');
+      blocks.forEach(block => {
+        const text = block.textContent.replace(/\u200B/g, '').trim();
+        if (text === '') {
+          block.textContent = ' ';
+        }
+      });
+
+      updatedHTML = doc.body.innerHTML;
+    }
+
+    // 3. Write back transformed contents to clipboard
+    const blobs = {
+      'text/plain': new Blob([updatedPlain], { type: 'text/plain' })
+    };
+    if (updatedHTML) {
+      blobs['text/html'] = new Blob([updatedHTML], { type: 'text/html' });
+    }
+
+    await navigator.clipboard.write([new ClipboardItem(blobs)]);
+
+    showStatus('Success! Preserved soft breaks inside paragraphs.', 'success');
+  } catch (err) {
+    showStatus(`Error: ${err.message}`, 'error');
+  }
+});
+
+function showStatus(msg, type) {
+  const statusDiv = document.getElementById('status');
+  statusDiv.style.display = 'block';
+  statusDiv.className = type;
+  statusDiv.textContent = msg;
+}
+</script>
+
+</body>
+</html>	
