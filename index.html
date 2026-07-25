@@ -74,8 +74,11 @@ document.addEventListener('paste', async (e) => {
       throw new Error('Pasted content contains no text or HTML.');
     }
 
-    // 1. Process Plain Text (Account for zero-width space \u200B and non-breaking space \u00A0)
-    const updatedPlain = plainContent.replace(/(?<=^|\n)[ \t\r\u200B\u00A0]*(?=\n|$)/g, '<emptyline>');
+    // 1. Process Plain Text: replace blank/empty line spaces with line breaks https://share.gemini.google/jhg1Bfyi6FJ2
+    const updatedPlain = plainContent
+      .split(/\r?\n/)
+      .map(line => line.trim() === '' ? '<emptyline>' : line)
+      .join('\n');
 
     // 2. Process HTML Text
     let updatedHTML = htmlContent;
@@ -83,32 +86,28 @@ document.addEventListener('paste', async (e) => {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlContent, 'text/html');
 
-      const blockSelector = 'p, div, h1, h2, h3, h4, h5, h6, li';
-      const blocks = doc.body.querySelectorAll(blockSelector);
+      // Target block elements
+      const blocks = doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6');
+      blocks.forEach(block => {
+        const text = block.textContent.replace(/\u200B/g, '').trim();
+        if (text === '') {
+          // Replace content with block-level wrapper to prevent inline collapsing
+          block.innerHTML = '<div>&lt;emptyline&gt;</div>';
+        }
+      });
 
-      if (blocks.length > 0) {
-        blocks.forEach(block => {
-          const cleanText = block.textContent
-            .replace(/[\u200B\u00A0]/g, '')
-            .trim();
+      // Target standalone <br> tags
+      const brs = doc.querySelectorAll('br');
+      brs.forEach(br => {
+        const container = doc.createElement('div');
+        container.textContent = '<emptyline>';
+        br.parentNode.replaceChild(container, br);
+      });
 
-          if (cleanText === '') {
-            block.innerHTML = '&lt;emptyline&gt;';
-          } else {
-            const brs = block.querySelectorAll('br');
-            brs.forEach(br => {
-              const replacement = doc.createTextNode('<emptyline>');
-              br.parentNode.replaceChild(replacement, br);
-            });
-          }
-        });
-        updatedHTML = doc.body.innerHTML;
-      } else {
-        updatedHTML = doc.body.innerHTML.replace(/<br\s*\/?>/gi, '<emptyline>');
-      }
+      updatedHTML = doc.body.innerHTML;
     }
 
-    // 3. Write back transformed content to system clipboard
+    // 3. Write back transformed content to clipboard
     const blobs = {
       'text/plain': new Blob([updatedPlain], { type: 'text/plain' })
     };
@@ -118,7 +117,7 @@ document.addEventListener('paste', async (e) => {
 
     await navigator.clipboard.write([new ClipboardItem(blobs)]);
 
-    showStatus('Success! Transformed content written back to clipboard. Press Ctrl+V in your target app.', 'success');
+    showStatus('Success! Separated <emptyline> written to clipboard. Ready to paste.', 'success');
   } catch (err) {
     showStatus(`Error: ${err.message}`, 'error');
   }
