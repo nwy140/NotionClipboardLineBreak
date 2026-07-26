@@ -51,7 +51,7 @@
 
 <div class="card">
   <h2>Clipboard Empty Line Replacer</h2>
-  <p>Press <code>Ctrl + V</code> anywhere to process clipboard contents.</p>
+  <p>Press <code>Ctrl + V</code> anywhere to process clipboard contents while preserving formatting.</p>
   
   <div class="drop-zone" tabindex="0">
     Click here and press <strong>Ctrl + V</strong>
@@ -60,7 +60,8 @@
   <div id="status"></div>
 </div>
   <p>Then In Notion, <br> Press <code> Ctrl + F -> Ctrl + Alt + F </code> to do a find & replace the &ltemptyline&gt with an empty line or blank space</p>
-
+  <br><br>
+  <p>  Paste linebreaks as <emptyline> when copying content from other apps into notion. Subsequently, User can then do an extra find and replace to overwrite the <emptyline> text with a spacebar or empty block</p>
 <script>
 document.addEventListener('paste', async (e) => {
   e.preventDefault();
